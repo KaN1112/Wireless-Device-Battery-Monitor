@@ -1,4 +1,4 @@
-# Builds dist\WirelessBattery-Setup-<version>.exe and dist\WirelessBattery-<version>-portable.zip.
+# Builds Wireless Battery JP distribution files (modified 2026-11-17).
 # Needs: WirelessBattery.exe already built (make / build.bat) and Inno Setup 6 or 7 installed.
 param([string]$Version = "1.0.0")
 $ErrorActionPreference = "Stop"
@@ -37,5 +37,13 @@ Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $stage | Out-Null
 Copy-Item WirelessBattery.exe, $hscExe, installer\THIRD_PARTY_NOTICES.txt $stage
 Copy-Item LICENSE (Join-Path $stage "LICENSE.txt")
-Compress-Archive -Path "$stage\*" -DestinationPath "dist\WirelessBattery-$Version-portable.zip" -Force
-Write-Host "Done: dist\WirelessBattery-Setup-$Version.exe and dist\WirelessBattery-$Version-portable.zip"
+Copy-Item README.md $stage
+Copy-Item CHANGELOG-JP.md $stage
+Compress-Archive -Path "$stage\*" -DestinationPath "dist\WirelessBatteryJP-$Version-portable.zip" -Force
+$artifacts = @("dist\WirelessBatteryJP-Setup-$Version.exe", "dist\WirelessBatteryJP-$Version-portable.zip")
+$sums = foreach ($file in $artifacts) {
+    $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+    "$hash  $([IO.Path]::GetFileName($file))"
+}
+Set-Content -Path "dist\SHA256SUMS.txt" -Value $sums -Encoding ascii
+Write-Host "Done: $($artifacts -join ', ') and dist\SHA256SUMS.txt"

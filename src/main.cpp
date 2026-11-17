@@ -6,6 +6,7 @@
 #include <hidclass.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <map>
 #include <set>
@@ -13,6 +14,7 @@
 #include <vector>
 
 #include "devices.h"
+#include "jp_strings.h"
 #include "widget.h"
 
 namespace {
@@ -22,17 +24,17 @@ constexpr UINT WM_RESULTS = WM_APP + 2;
 constexpr UINT WM_WIDGET_CLICK = WM_APP + 3;
 constexpr UINT_PTR TIMER_DEBOUNCE = 1;
 constexpr UINT_PTR TIMER_WIDGET = 2;
-constexpr DWORD POLL_INTERVAL_MS = 60 * 1000;
-constexpr int LOW_BATTERY = 15;
 constexpr UINT PLACEHOLDER_ID = 1;
 
-enum MenuId : UINT { ID_REFRESH = 100, ID_AUTOSTART, ID_HIDE_LAST_KNOWN, ID_EXIT, ID_MODE_WIDGET, ID_MODE_TRAY, ID_DEVICE_FIRST = 1000 };
+enum MenuId : UINT { ID_REFRESH = 100, ID_AUTOSTART, ID_HIDE_LAST_KNOWN, ID_EXIT, ID_MODE_WIDGET, ID_MODE_TRAY,
+                     ID_INTERVAL_10, ID_INTERVAL_30, ID_INTERVAL_60, ID_INTERVAL_120, ID_INTERVAL_300,
+                     ID_DEVICE_FIRST = 1000 };
 
-const wchar_t* kAppName = L"Wireless Battery";
+const wchar_t* kAppName = jp::AppName;
 const wchar_t* kRunKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-const wchar_t* kRunValue = L"WirelessBattery";
+const wchar_t* kRunValue = L"WirelessBatteryJP";
 
-const wchar_t* kSettingsKey = L"Software\\WirelessBattery";
+const wchar_t* kSettingsKey = L"Software\\WirelessBatteryJP";
 
 HINSTANCE g_inst;
 HWND g_hwnd;
@@ -42,6 +44,8 @@ bool g_lightTaskbar;
 bool g_wantWidget = true;      // user's choice: taskbar widget (default) or tray icons
 bool g_useWidget = false;      // what is actually shown right now
 bool g_hideLastKnown = false;  // hide (last known) / asleep devices from taskbar and tray
+std::atomic<DWORD> g_pollIntervalMs{ 60 * 1000 };
+int g_lowBattery = 15;
 
 struct TrayEntry {
     UINT uid = 0;
@@ -114,6 +118,16 @@ bool LoadBoolSetting(const wchar_t* name, bool defaultVal) {
 void SaveBoolSetting(const wchar_t* name, bool on) {
     DWORD v = on ? 1 : 0;
     RegSetKeyValueW(HKEY_CURRENT_USER, kSettingsKey, name, REG_DWORD, &v, sizeof(v));
+}
+
+DWORD LoadDwordSetting(const wchar_t* name, DWORD defaultVal) {
+    DWORD v = defaultVal, sz = sizeof(v);
+    RegGetValueW(HKEY_CURRENT_USER, kSettingsKey, name, RRF_RT_REG_DWORD, nullptr, &v, &sz);
+    return v;
+}
+
+void SaveDwordSetting(const wchar_t* name, DWORD value) {
+    RegSetKeyValueW(HKEY_CURRENT_USER, kSettingsKey, name, REG_DWORD, &value, sizeof(value));
 }
 
 bool LoadWidgetMode() { return LoadBoolSetting(L"TaskbarWidget", true); }
@@ -243,10 +257,10 @@ Rgb Foreground() { return g_lightTaskbar ? Rgb{ 0, 0, 0 } : Rgb{ 255, 255, 255 }
 HICON IconFor(int pct, bool charging, bool dim) {
     Rgb fg = Foreground();
     Rgb bar = charging        ? Rgb{ 0, 170, 255 }
-            : pct <= LOW_BATTERY ? Rgb{ 232, 32, 48 }
+            : pct <= g_lowBattery ? Rgb{ 232, 32, 48 }
             : pct <= 30       ? Rgb{ 255, 150, 0 }
                               : Rgb{ 30, 190, 90 };
-    Rgb text = (!charging && pct >= 0 && pct <= LOW_BATTERY) ? Rgb{ 240, 50, 60 } : fg;
+    Rgb text = (!charging && pct >= 0 && pct <= g_lowBattery) ? Rgb{ 240, 50, 60 } : fg;
     std::wstring t = pct < 0 ? L"?" : std::to_wstring(pct);
     return RenderIcon(t, pct, text, bar, dim);
 }
@@ -258,16 +272,40 @@ void CopyTip(wchar_t* dst, size_t cap, const std::wstring& s) {
     dst[cap - 1] = 0;
 }
 
+std::wstring LocalizeLevel(const std::wstring& value) {
+    if (value == L"Full") return L"十分";
+    if (value == L"Good") return L"良好";
+    if (value == L"Medium") return L"中程度";
+    if (value == L"Low") return L"低下";
+    if (value == L"Critical") return L"残量わずか";
+    if (value == L"Empty") return L"残量なし";
+    return value;
+}
+
+std::wstring LocalizeConnection(const std::wstring& value) {
+    if (value == L"USB cable") return L"USBケーブル";
+    if (value == L"2.4 GHz receiver") return L"2.4 GHzレシーバー";
+    if (value == L"Wireless adapter") return L"ワイヤレスアダプター";
+    if (value == L"Logitech receiver") return L"Logicoolレシーバー";
+    if (value == L"USB / Bluetooth") return L"USB / Bluetooth";
+    return value;
+}
+
+std::wstring LocalizeDeviceName(const std::wstring& value) {
+    if (value.rfind(L"Logitech", 0) == 0) return L"Logicool" + value.substr(8);
+    return value;
+}
+
 std::wstring StatusText(const TrayEntry& e) {
     const auto& s = e.st;
-    if (!s.connected) return L"off / not connected";
+    if (!s.connected) return jp::NotConnected;
     std::wstring t;
-    if (!s.levelText.empty() && s.percent >= 0) t = s.levelText;
+    if (!s.levelText.empty() && s.percent >= 0) t = LocalizeLevel(s.levelText);
     else if (s.percent >= 0) t = std::to_wstring(s.percent) + L"%";
-    else if (e.lastPct >= 0) t = std::to_wstring(e.lastPct) + L"% (last known)";
-    else t = L"unknown";
-    if (s.charging) t += L", charging";
-    if (s.asleep) t += L", asleep";
+    else if (e.lastPct >= 0) t = std::to_wstring(e.lastPct) + L"%（" + jp::LastKnown + L"）";
+    else t = jp::Unknown;
+    if (s.charging) t += L"、" + std::wstring(jp::Charging);
+    if (s.asleep) t += L"、" + std::wstring(jp::Asleep);
     return t;
 }
 
@@ -309,7 +347,7 @@ void UpdatePlaceholder() {
     for (auto& [k, e] : g_entries) any |= e.added;
     if (!any && !g_placeholder) {
         if (!g_placeholderIcon) g_placeholderIcon = RenderIcon(L"-", -1, Foreground(), Foreground(), true);
-        TrayCall(NIM_ADD, PLACEHOLDER_ID, g_placeholderIcon, L"Wireless Battery\nNo devices with battery info found");
+        TrayCall(NIM_ADD, PLACEHOLDER_ID, g_placeholderIcon, std::wstring(jp::AppName) + L"\n" + jp::NoDevices);
         g_placeholder = true;
     } else if (any && g_placeholder) {
         TrayDelete(PLACEHOLDER_ID);
@@ -332,15 +370,15 @@ void ApplyEntry(TrayEntry& e) {
         e.icon = IconFor(shown, s.charging, dim);
         e.iconSig = sig;
     }
-    std::wstring tip = s.name + L"\n" + StatusText(e);
+    std::wstring tip = LocalizeDeviceName(s.name) + L"\n" + StatusText(e);
 
     const wchar_t* infoTitle = nullptr;
     std::wstring info;
-    if (s.charging || shown > LOW_BATTERY + 10) e.lowWarned = false;
-    if (!s.charging && s.percent >= 0 && s.percent <= LOW_BATTERY && !e.lowWarned) {
+    if (s.charging || shown > g_lowBattery + 10) e.lowWarned = false;
+    if (!s.charging && s.percent >= 0 && s.percent <= g_lowBattery && !e.lowWarned) {
         e.lowWarned = true;
-        infoTitle = L"Low battery";
-        info = s.name + L" is at " + std::to_wstring(s.percent) + L"%";
+        infoTitle = jp::LowBattery;
+        info = LocalizeDeviceName(s.name) + L" のバッテリー残量は " + std::to_wstring(s.percent) + L"% です";
     }
     TrayCall(e.added ? NIM_MODIFY : NIM_ADD, e.uid, e.icon, tip, infoTitle, info);
     e.added = true;
@@ -371,16 +409,16 @@ void UpdateWidget() {
         WidgetItem it;
         it.kind = e->st.kind;
         it.percent = e->st.percent >= 0 ? e->st.percent : e->lastPct;
-        if (e->st.percent >= 0) it.text = e->st.levelText;
+        if (e->st.percent >= 0) it.text = LocalizeLevel(e->st.levelText);
         it.charging = e->st.charging;
         it.dim = e->st.percent < 0;
-        it.low = !it.charging && it.percent >= 0 && it.percent <= LOW_BATTERY;
+        it.low = !it.charging && it.percent >= 0 && it.percent <= g_lowBattery;
         it.bluetooth = e->st.via == L"Bluetooth";
         items.push_back(it);
         if (!tip.empty()) tip += L"\n";
-        tip += e->st.name + L": " + StatusText(*e);
+        tip += LocalizeDeviceName(e->st.name) + L"：" + StatusText(*e);
     }
-    if (tip.empty()) tip = L"Wireless Battery: no devices with battery info found";
+    if (tip.empty()) tip = std::wstring(jp::AppName) + L"：" + jp::NoDevices;
     widget::SetItems(items, tip);
 }
 
@@ -467,23 +505,31 @@ void RedrawAll() {
 void ShowMenu() {
     HMENU m = CreatePopupMenu();
     std::vector<std::wstring> keys;  // menu id ID_DEVICE_FIRST + i -> device key
-    if (g_entries.empty()) AppendMenuW(m, MF_STRING | MF_GRAYED, 0, L"No devices with battery info found");
-    else AppendMenuW(m, MF_STRING | MF_GRAYED, 0, L"Click a device to show or hide it");
+    if (g_entries.empty()) AppendMenuW(m, MF_STRING | MF_GRAYED, 0, jp::NoDevices);
+    else AppendMenuW(m, MF_STRING | MF_GRAYED, 0, jp::DeviceHint);
     for (auto& [k, e] : g_entries) {
-        std::wstring line = e.st.name + L":  " + StatusText(e) + L"   [" + e.st.via + L"]";
+        std::wstring line = LocalizeDeviceName(e.st.name) + L"： " + StatusText(e) + L"   [" + LocalizeConnection(e.st.via) + L"]";
         AppendMenuW(m, MF_STRING | (IsHidden(k) ? 0 : MF_CHECKED), ID_DEVICE_FIRST + (UINT)keys.size(), line.c_str());
         keys.push_back(k);
     }
-    AppendMenuW(m, MF_STRING | (g_hideLastKnown ? MF_CHECKED : 0), ID_HIDE_LAST_KNOWN, L"Hide last known / asleep devices");
+    AppendMenuW(m, MF_STRING | (g_hideLastKnown ? MF_CHECKED : 0), ID_HIDE_LAST_KNOWN, jp::HideSleeping);
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(m, MF_STRING | (g_wantWidget ? MF_CHECKED : 0), ID_MODE_WIDGET, L"Show on the taskbar (icon + percentage)");
-    AppendMenuW(m, MF_STRING | (!g_wantWidget ? MF_CHECKED : 0), ID_MODE_TRAY, L"Show as tray icons");
+    AppendMenuW(m, MF_STRING | (g_wantWidget ? MF_CHECKED : 0), ID_MODE_WIDGET, jp::Taskbar);
+    AppendMenuW(m, MF_STRING | (!g_wantWidget ? MF_CHECKED : 0), ID_MODE_TRAY, jp::Tray);
     CheckMenuRadioItem(m, ID_MODE_WIDGET, ID_MODE_TRAY, g_wantWidget ? ID_MODE_WIDGET : ID_MODE_TRAY, MF_BYCOMMAND);
+    HMENU interval = CreatePopupMenu();
+    const struct { UINT id; DWORD sec; const wchar_t* label; } intervals[] = {
+        { ID_INTERVAL_10, 10, L"10秒" }, { ID_INTERVAL_30, 30, L"30秒" }, { ID_INTERVAL_60, 60, L"60秒（推奨）" },
+        { ID_INTERVAL_120, 120, L"120秒" }, { ID_INTERVAL_300, 300, L"300秒" }
+    };
+    for (const auto& i : intervals)
+        AppendMenuW(interval, MF_STRING | (g_pollIntervalMs.load() == i.sec * 1000 ? MF_CHECKED : 0), i.id, i.label);
+    AppendMenuW(m, MF_POPUP, reinterpret_cast<UINT_PTR>(interval), jp::PollInterval);
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(m, MF_STRING, ID_REFRESH, L"Refresh now");
-    AppendMenuW(m, MF_STRING | (AutostartEnabled() ? MF_CHECKED : 0), ID_AUTOSTART, L"Start with Windows");
+    AppendMenuW(m, MF_STRING, ID_REFRESH, jp::Refresh);
+    AppendMenuW(m, MF_STRING | (AutostartEnabled() ? MF_CHECKED : 0), ID_AUTOSTART, jp::Autostart);
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(m, MF_STRING, ID_EXIT, L"Exit");
+    AppendMenuW(m, MF_STRING, ID_EXIT, jp::Exit);
     POINT pt;
     GetCursorPos(&pt);
     SetForegroundWindow(g_hwnd);
@@ -496,6 +542,13 @@ void ShowMenu() {
         case ID_HIDE_LAST_KNOWN: SetHideLastKnown(!g_hideLastKnown); break;
         case ID_MODE_WIDGET: SetMode(true); break;
         case ID_MODE_TRAY: SetMode(false); break;
+        case ID_INTERVAL_10: case ID_INTERVAL_30: case ID_INTERVAL_60: case ID_INTERVAL_120: case ID_INTERVAL_300: {
+            const DWORD seconds[] = { 10, 30, 60, 120, 300 };
+            g_pollIntervalMs = seconds[cmd - ID_INTERVAL_10] * 1000;
+            SaveDwordSetting(L"PollIntervalMs", g_pollIntervalMs.load());
+            SetEvent(g_refreshEvt);
+            break;
+        }
         case ID_EXIT: DestroyWindow(g_hwnd); break;
         default:
             if (cmd >= ID_DEVICE_FIRST && cmd < ID_DEVICE_FIRST + keys.size()) {
@@ -517,7 +570,7 @@ DWORD WINAPI Worker(LPVOID) {
         auto* v = new std::vector<DeviceStatus>(PollAllDevices());
         if (!PostMessageW(g_hwnd, WM_RESULTS, 0, (LPARAM)v)) delete v;
         HANDLE hs[2] = { g_stopEvt, g_refreshEvt };
-        if (WaitForMultipleObjects(2, hs, FALSE, POLL_INTERVAL_MS) == WAIT_OBJECT_0) return 0;
+        if (WaitForMultipleObjects(2, hs, FALSE, g_pollIntervalMs.load()) == WAIT_OBJECT_0) return 0;
     }
 }
 
@@ -601,15 +654,15 @@ int ListToConsole(bool dump) {
         return 0;
     }
     auto list = PollAllDevices();
-    if (list.empty()) write(L"No devices with battery info found.\n");
+    if (list.empty()) write(std::wstring(jp::NoDevices) + L"。\n");
     for (auto& s : list) {
-        std::wstring line = s.name + L"  [" + s.via + L"]  ";
-        if (!s.connected) line += L"off / not connected";
-        else if (s.asleep) line += L"asleep";
-        else if (!s.levelText.empty()) line += s.levelText;
+        std::wstring line = LocalizeDeviceName(s.name) + L"  [" + LocalizeConnection(s.via) + L"]  ";
+        if (!s.connected) line += jp::NotConnected;
+        else if (s.asleep) line += jp::Asleep;
+        else if (!s.levelText.empty()) line += LocalizeLevel(s.levelText);
         else if (s.percent >= 0) line += std::to_wstring(s.percent) + L"%";
-        else line += L"unknown";
-        if (s.charging) line += L", charging";
+        else line += jp::Unknown;
+        if (s.charging) line += L"、" + std::wstring(jp::Charging);
         if (s.millivolts) line += L", " + std::to_wstring(s.millivolts) + L" mV";
         write(line + L"   (" + s.key + L")\n");
     }
@@ -622,15 +675,15 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int) {
     if (cmdLine && wcsstr(cmdLine, L"--list")) return ListToConsole(false);
     if (cmdLine && wcsstr(cmdLine, L"--dump")) return ListToConsole(true);
     if (cmdLine && wcsstr(cmdLine, L"--quit")) {  // used by the installer before upgrading/uninstalling
-        if (HWND w = FindWindowW(L"WirelessBatteryWnd", nullptr)) {
+        if (HWND w = FindWindowW(L"WirelessBatteryJPWnd", nullptr)) {
             PostMessageW(w, WM_CLOSE, 0, 0);
-            for (int i = 0; i < 50 && FindWindowW(L"WirelessBatteryWnd", nullptr); i++) Sleep(100);
+            for (int i = 0; i < 50 && FindWindowW(L"WirelessBatteryJPWnd", nullptr); i++) Sleep(100);
         }
         return 0;
     }
     g_inst = inst;
 
-    HANDLE mutex = CreateMutexW(nullptr, TRUE, L"Local\\WirelessBatteryTray");
+    HANDLE mutex = CreateMutexW(nullptr, TRUE, L"Local\\WirelessBatteryJPTray");
     if (GetLastError() == ERROR_ALREADY_EXISTS) return 0;
 
     g_lightTaskbar = ReadLightTaskbar();
@@ -639,7 +692,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int) {
     WNDCLASSEXW wc{ sizeof(wc) };
     wc.lpfnWndProc = WndProc;
     wc.hInstance = inst;
-    wc.lpszClassName = L"WirelessBatteryWnd";
+    wc.lpszClassName = L"WirelessBatteryJPWnd";
     RegisterClassExW(&wc);
     // A hidden top-level window (not message-only) so it receives the TaskbarCreated broadcast.
     g_hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, wc.lpszClassName, kAppName, WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, inst, nullptr);
@@ -654,6 +707,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmdLine, int) {
     g_stopEvt = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     g_wantWidget = LoadWidgetMode();
     g_hideLastKnown = LoadHideLastKnown();
+    g_pollIntervalMs = LoadDwordSetting(L"PollIntervalMs", 60000);
+    if (g_pollIntervalMs != 10000 && g_pollIntervalMs != 30000 && g_pollIntervalMs != 60000 &&
+        g_pollIntervalMs != 120000 && g_pollIntervalMs != 300000) g_pollIntervalMs = 60000;
+    g_lowBattery = static_cast<int>(LoadDwordSetting(L"LowBatteryThreshold", 15));
+    if (g_lowBattery < 1 || g_lowBattery > 50) g_lowBattery = 15;
     LoadHidden();
     Reconcile();
     UpdatePlaceholder();  // something to click on until the first poll finishes

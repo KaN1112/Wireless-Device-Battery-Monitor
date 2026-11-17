@@ -1,4 +1,4 @@
-; Inno Setup script for Wireless Battery (https://jrsoftware.org/isinfo.php).
+; Inno Setup script for Wireless Battery JP (modified 2026-11-17).
 ; Per-user install by default: no administrator rights needed, installs to %LOCALAPPDATA%\Programs.
 ; Setup also offers "Install for all users" (Program Files, needs administrator rights).
 ; Build with installer\build-installer.ps1 (or: ISCC /DAppVersion=1.2.3 installer\WirelessBattery.iss).
@@ -9,12 +9,13 @@
 #define Root ".."
 
 [Setup]
-AppId={{7E0B5C2A-3F4D-4C8E-9B61-2D5A8F1C4E93}
-AppName=Wireless Battery
+AppId={{D16A577B-3523-4D8F-A9CF-8D87AF89E92A}
+AppName=Wireless Battery JP
 AppVersion={#AppVersion}
-AppVerName=Wireless Battery {#AppVersion}
-AppPublisher=Wireless Battery contributors
-DefaultDirName={autopf}\Wireless Battery
+AppVerName=Wireless Battery JP {#AppVersion}
+AppPublisher=Wireless Battery JP contributors
+AppPublisherURL=https://github.com/KaN1112/Wireless-Device-Battery-Monitor
+DefaultDirName={autopf}\Wireless Battery JP
 DisableProgramGroupPage=yes
 DisableDirPage=auto
 PrivilegesRequired=lowest
@@ -23,29 +24,35 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir={#Root}\dist
-OutputBaseFilename=WirelessBattery-Setup-{#AppVersion}
+OutputBaseFilename=WirelessBatteryJP-Setup-{#AppVersion}
 SetupIconFile={#Root}\res\app.ico
 UninstallDisplayIcon={app}\WirelessBattery.exe
-UninstallDisplayName=Wireless Battery
+UninstallDisplayName=Wireless Battery JP
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+ShowLanguageDialog=no
 CloseApplications=no
 
+[Languages]
+Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
+
 [Tasks]
-Name: "autostart"; Description: "Start Wireless Battery when I sign in to Windows"
+Name: "autostart"; Description: "Windows起動時にWireless Battery JPを自動起動する"
 
 [Files]
 Source: "{#Root}\WirelessBattery.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Root}\third_party\headsetcontrol\headsetcontrol.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Root}\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "{#Root}\installer\THIRD_PARTY_NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Root}\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Root}\CHANGELOG-JP.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\Wireless Battery"; Filename: "{app}\WirelessBattery.exe"
+Name: "{autoprograms}\Wireless Battery JP"; Filename: "{app}\WirelessBattery.exe"
 
 [Run]
-Filename: "{app}\WirelessBattery.exe"; Description: "Start Wireless Battery now"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\WirelessBattery.exe"; Description: "Wireless Battery JPを起動する"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 Filename: "{app}\WirelessBattery.exe"; Parameters: "--quit"; Flags: runhidden waituntilterminated; RunOnceId: "QuitApp"
@@ -73,8 +80,8 @@ procedure RemoveOwnAutostart();
 var
   Value: String;
 begin
-  if RegQueryStringValue(HKCU, RunKey, 'WirelessBattery', Value) and (CompareText(Value, InstalledRunValue()) = 0) then
-    RegDeleteValue(HKCU, RunKey, 'WirelessBattery');
+  if RegQueryStringValue(HKCU, RunKey, 'WirelessBatteryJP', Value) and (CompareText(Value, InstalledRunValue()) = 0) then
+    RegDeleteValue(HKCU, RunKey, 'WirelessBatteryJP');
 end;
 
 { True if this account can create the chosen folder (or write to it if it already exists).
@@ -115,13 +122,12 @@ begin
   if (CurPageID = wpSelectDir) and not WizardSilent() and not CanWriteTo(WizardDirValue()) then
   begin
     if IsAdminInstallMode() then
-      MsgBox('Setup cannot create or write to this folder:' + #13#10 + WizardDirValue() + #13#10#13#10 +
-        'Please choose a different folder.', mbError, MB_OK)
+      MsgBox('このフォルダーを作成または書き込みできません：' + #13#10 + WizardDirValue() + #13#10#13#10 +
+        '別のフォルダーを選択してください。', mbError, MB_OK)
     else
-      MsgBox('Your account cannot create or write to this folder without administrator rights:' + #13#10 +
+      MsgBox('管理者権限なしでは、このフォルダーを作成または書き込みできません：' + #13#10 +
         WizardDirValue() + #13#10#13#10 +
-        'Choose a folder you own (the default one always works), or close Setup, run it again and ' +
-        'pick "Install for all users".', mbError, MB_OK);
+        '既定のフォルダーなど書き込み可能な場所を選択するか、セットアップを閉じて管理者として再実行してください。', mbError, MB_OK);
     Result := False;
   end;
 end;
@@ -134,7 +140,7 @@ begin
   begin
     { Same value the app's own "Start with Windows" menu item writes, so the two stay in sync. }
     if WizardIsTaskSelected('autostart') then
-      RegWriteStringValue(HKCU, RunKey, 'WirelessBattery', InstalledRunValue())
+      RegWriteStringValue(HKCU, RunKey, 'WirelessBatteryJP', InstalledRunValue())
     else
       RemoveOwnAutostart();
   end;
@@ -145,6 +151,6 @@ begin
   if CurUninstallStep = usPostUninstall then
   begin
     RemoveOwnAutostart();
-    RegDeleteKeyIncludingSubkeys(HKCU, 'Software\WirelessBattery');
+    RegDeleteKeyIncludingSubkeys(HKCU, 'Software\WirelessBatteryJP');
   end;
 end;

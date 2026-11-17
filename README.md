@@ -1,150 +1,111 @@
-# Wireless Battery
+# Wireless Battery JP
 
-Battery levels of your wireless mouse, headset, keyboard and controller, right on the Windows taskbar.
+ワイヤレスマウス、ヘッドセット、キーボード、コントローラーのバッテリー残量をWindowsのタスクバーへ直接表示する、軽量なC++17／Win32アプリです。
 
-![Wireless Battery on the taskbar](docs/screenshot.png)
+> 本ソフトウェアはkrisgfx9氏による[Wireless-Device-Battery-Monitor](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor)を基に制作された非公式日本語版です。元作者による公式な承認・サポートを受けた製品ではありません。
 
-> **Just want it working?** Download **[WirelessBattery-Setup](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor/releases/latest)** from the latest release, run it and click through. That's it.
->
-> **Experienced users** can grab the portable zip, use the [command-line options](#command-line), or [build it from source](#build) with `make` or `build.bat`.
+日本語版の実画面スクリーンショットは公開前のWindows 10／11実機確認後に追加します。英語版の画像を日本語版の動作画面として掲載しません。
 
-- **Tiny**: a ~350 KB app using about 2 MB of RAM. It's plain C++/Win32, with no runtime and no background service, and installs in seconds without admin rights.
-- **No vendor software needed**: it talks to the devices directly. G HUB, Synapse, iCUE, GG and NGenuity can stay closed (or keep running; they don't conflict).
-- **Many brands**: Logitech, Razer, SteelSeries, Corsair, HyperX, Glorious, PlayStation and Xbox controllers, any Bluetooth device Windows knows a battery level for, and every headset the bundled [HeadsetControl](https://github.com/Sapd/HeadsetControl) supports.
+## 主な機能
 
-## Display
+- タスクバーへ `🎧 30%  🖱 93%` のように直接表示（既定）
+- デバイスごとの通知領域アイコンへ切り替え可能
+- 充電中、低残量、スリープ中、最終取得値を区別
+- ダーク／ライトテーマ、DPIスケーリング、Explorer再起動に追従
+- タスクバーへ配置できない場合は通知領域へ安全にフォールバック
+- 10／30／60（既定）／120／300秒の更新間隔
+- Windows自動起動、デバイスごとの表示切り替え
+- デバイス情報の外部送信や自動更新を行わない
 
-**On the taskbar (default):** `🎧 30%  🖱 93%` next to the notification area, drawn with the Windows icon font.
-- **Low battery:** a red number means 15% or less.
-- **Charging:** a blue ⚡ appears next to the number.
-- **Asleep:** dimmed text means the device is asleep and the last known value is shown.
-- **Theme:** it follows light/dark mode and DPI scaling.
+単体の`WirelessBattery.exe`でも基本機能が動作します。`headsetcontrol.exe`がない場合はHeadsetControl経由の追加ヘッドセット対応だけが無効になります。
 
-**Tray icons:** one icon per device with the number drawn in it, plus a "Low battery" notification at 15%. The app switches to this automatically when the taskbar is vertical or can't be found.
+## 対応デバイス
 
-Hover for details. Click for the menu: every device (click one to hide or show it), display mode, *Refresh now*, *Start with Windows*, and *Exit*. Levels refresh every 60 seconds, and right away when a device is plugged in or the PC wakes up.
+元プロジェクトの既存ドライバーをすべて維持しています。
 
-## Supported devices
-
-| Vendor | Devices | How |
+| メーカー／方式 | 対応範囲 | 取得方法 |
 |---|---|---|
-| **Logitech** | Mice and keyboards on Unifying, Bolt, Lightspeed and Nano receivers, over USB or Bluetooth; G headsets (G533, G535, G633/G635/G733/G933/G935, G PRO/PRO X) | HID++ 1.0 / 2.0 with feature discovery: unified battery, battery level, voltage, ADC |
-| **Razer** | Wireless mice, keyboards and dongles; BlackShark V3 / V3 Pro headsets | Razer feature-report protocol; headset envelope protocol (queried every 5 min) |
-| **SteelSeries** | Arctis 1/7/7+/9/Pro/Pro Wireless, Arctis Nova 3P/5/7/7X/7P/Pro Wireless, GameBuds; Aerox 3/5/9 Wireless, Prime Wireless, Rival 3 Wireless (Gen 2), Rival 650, Rival Pro | Vendor HID reports |
-| **Corsair** | Void / Void Pro / Void Elite / HS70 / HS80 wireless; Bragi devices (Virtuoso, Void V2, HS80 MAX, Slipstream mice and keyboards) | Vendor HID reports, Bragi `GET` (read-only) |
-| **Cooler Master** | MM712, MM731 (2.4 GHz dongle or USB cable) | Vendor HID status report (read-only) |
-| **HyperX** | Cloud III Wireless, Cloud III S Wireless, Cloud II Wireless (HP, Kingston, DTS), Cloud II Core Wireless, Cloud Alpha Wireless, Cloud Alpha 2 Wireless, Cloud Flight, Cloud Flight S | Vendor HID reports |
-| **Glorious** | Model O / O- / D / D- Wireless, Model O 2 / D 2 PRO | Vendor feature report |
-| **Hitscan** | Hyperlight X, Hyperlight N | Vendor feature report (same protocol as Glorious) |
-| **Kysona / Pulsar / ATK (VXE) / Hitscan** | Kysona M600 / Mercury, Pulsar and ATK VXE wireless mice (e.g. VXE X3 Pro, ATK F1 Extreme), Hitscan Hyperlight | Shared vendor protocol with checksummed replies |
-| **ATK headsets** | ATK N9 Pro | Virtual COM port protocol (the ATK desktop app must be closed) |
-| **G-Wolves** | Fenrir, Fenrir Pro / Max / Asym, HTX, HTS, HSK, HTR, HT-S2, Lycan, WARG, VUK and their 8K dongles | Glorious or Kysona protocol, depending on the model |
-| **Keychron mice** | M4 and other Keychron mice on the 2.4 GHz receiver; 8K mice (M5 8K, G6 HE 8K ...) on the TurboLink 8K receiver | Vendor report from Keychron Launcher |
-| **LAMZU** | Maya X, Maya, Maya M, Tachi, Inca, Paro, Thorn, Atlantis Mini / OG Champion, Orcus (cable, 1K and 4K/8K dongles) | Vendor feature report from LAMZU Aurora |
-| **Redragon** | Compx-based wireless mice: M916 Pro 1K (tested), M913 Impact Elite (tri-mode), G49 (receiver or cable) | Kysona protocol |
-| **AULA** | F75 / F87 Pro / F99 wireless keyboards on the 2.4 GHz receiver | Report 0x13 frame, command 0x4A, sum checksum (Bluetooth and wired modes untested) |
-| **ASUS ROG** | Strix Scope II 96 (RX), Azoth, Falchion keyboards; Keris, Harpe, Gladius, Chakram, Spatha, Pugio, Strix Impact mice; the Omni Receiver | ROG HID battery query |
-| **ZOWIE** | EC1/EC2/EC3-CW and DW series (U2-DW, S2-DW ...) | Community-documented read-only vendor commands |
-| **Rapoo VT** | VT3 Max Gen 2 (tested); other Nordic 54L VT mice exposing the same status interface; legacy VT3 Pro (experimental) | Passive HID status report `07` on `FF00:0002`; legacy `BB` restricted to VT3 Pro `1215/4415`. Receiver and USB cable, with charging state |
-| **Motospeed / Delux / Ajazz** | Motospeed X6, Delux M900 Pro, Ajazz AJ179 family; AJ159 and other AJ-series mice on the 3151 receiver | Vendor reports (Delux: passive status broadcasts; AJ-series: 0xF7 status poll, then feature report 0x05) |
-| **Attack Shark and other Chinese brands** | Rongyuan receivers (81 models: Attack Shark R3, X82 PRO HE, Ajazz keyboards, some MSI and others); Xenta receivers (Attack Shark X6 / R1, X11, X3 Max, V3 Pro) | Rongyuan status report; Xenta passive broadcasts |
-| **Sony** | DualShock 4, DualSense, DualSense Edge (USB, Bluetooth, wireless adapter); INZONE H9 II and H5 headsets | Input report; INZONE vendor protocol |
-| **GameSir** | Nova Lite, Nova 2, Nova 2 Lite on the 2.4 GHz receiver; Nova 2 Lite on USB | Vendor device-info query (usage page FF7A) |
-| **Xbox** | Controllers on the Xbox Wireless adapter, USB or Bluetooth; headsets plugged into a controller | Windows.Gaming.Input battery report (real %), XInput fallback |
-| **Bluetooth** | Anything that shows a battery in *Settings → Bluetooth & devices* (earbuds, headphones, BLE mice and keyboards) | Windows device property |
-| **Generic HID** | Devices reporting the standard HID *Battery Strength* usage | HID usage page 0x06 / 0x85 |
-| **HeadsetControl** | [Every headset it supports](https://github.com/Sapd/HeadsetControl#supported-headsets) (Audeze, Jabra, Sony INZONE, newer Logitech and more) | Bundled; runs `headsetcontrol -o json` |
+| Logicool（Logitech） | Unifying、Bolt、LIGHTSPEED、Nano、USB、Bluetooth接続の対応マウス／キーボード、対応Gヘッドセット | HID++ 1.0／2.0、Unified Battery、Battery Status、Battery Voltage、ADC |
+| Razer | 対応マウス、キーボード、ドングル、BlackShark V3系列 | ベンダーHID |
+| SteelSeries | 対応Arctis、Aerox、Prime、Rival系列 | ベンダーHID |
+| Corsair／HyperX | 対応ヘッドセット、マウス、キーボード | ベンダーHID |
+| Sony／Xbox／GameSir | 対応コントローラー、INZONE | 入力レポート／Windows.Gaming.Input／XInput等 |
+| Bluetooth | Windows設定に残量が表示される機器 | Windowsデバイスプロパティ |
+| Generic HID | Battery Strength usageを公開する機器 | 標準HID usage |
+| HeadsetControl | HeadsetControl 4.3.0の対応機器 | 同梱CLIのJSON出力 |
 
-**Tested on real hardware:** Glorious Model O Wireless, HyperX Cloud III Wireless, Cooler Master MM712 (dongle), Rapoo VT3 Max Gen 2 (receiver `24AE:1417` and USB cable `24AE:4617`; other Rapoo models are untested, see [Rapoo protocol notes](docs/rapoo.md)) and Redragon M916 Pro 1K (receiver `3554:F55D`).
-**Implemented from protocol documentation and other projects, not yet tested:** everything else. If you own one of these devices, please report whether it works by [opening an issue](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor/issues).
+そのほかGlorious、Hitscan、Kysona、Pulsar、ATK、G-Wolves、Keychron、LAMZU、Redragon、AULA、ASUS ROG、ZOWIE、Rapoo、Motospeed、Delux、Ajazz、Attack Shark、Cooler Masterなどの既存ドライバーを含みます。詳細は[`src/drivers/`](src/drivers)を参照してください。
 
-## Install
+### Logicool製マウス
 
-[![Latest version](https://img.shields.io/github/v/release/krisgfx9/Wireless-Device-Battery-Monitor?label=latest%20version&style=for-the-badge)](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor/releases/latest)
+認識済みインターフェースに対して読み取り用の既知HID++コマンドだけを送信します。G PRO Wireless、G PRO X SUPERLIGHT系列、G502 LIGHTSPEED系列、G703系列、G304／G305系列、MX Master系列はプロトコル上の対象になり得ますが、本日本語版では実機検証していないため動作確認済みとは表記しません。接続方式と機種により取得可能な情報は異なります。
 
-1. Download **`WirelessBattery-Setup-<version>.exe`** from the [latest release](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor/releases/latest).
-2. Run it and click through. It needs **no administrator rights** and **nothing else installed**: no
-   runtimes, no drivers, no vendor apps. HeadsetControl comes bundled.
+## 実機検証済みデバイス
 
-The installer adds a Start menu entry and an uninstaller (*Settings → Apps*), and can start the app
-when you sign in. Prefer no installer? Download `WirelessBattery-<version>-portable.zip`, unzip it
-anywhere and run `WirelessBattery.exe`.
+日本語版としての実機検証は未実施です。元READMEにはGlorious Model O Wireless、HyperX Cloud III Wireless、Cooler Master MM712、Rapoo VT3 Max Gen 2、Redragon M916 Pro 1Kの確認記録がありますが、日本語版による再検証結果ではありません。
 
-**Notes:**
-- **SmartScreen warning:** the exe is not code-signed, so Windows may say "Windows protected your PC". Click *More info → Run anyway*, or build it yourself.
-- **Tray-icon mode on Windows 11:** new tray icons go to the `^` overflow. Drag them onto the taskbar or enable them in *Settings → Personalization → Taskbar → Other system tray icons*.
+## インストール
 
-## Command line
+GitHub Releasesでは次を配布予定です。
 
-```
-WirelessBattery.exe --list   # print every device and its battery level, then exit
-WirelessBattery.exe --dump   # print every HID collection (useful when asking for a new device)
-WirelessBattery.exe --quit   # close the running instance
+- `WirelessBatteryJP-Setup-1.0.0-jp.1.exe`
+- `WirelessBatteryJP-1.0.0-jp.1-portable.zip`
+- `SHA256SUMS.txt`
+- HeadsetControl対応ソースアーカイブ
+
+セットアップ版は通常、管理者権限が不要です。英語版とは別のAppId、インストール先、設定キー、自動起動名を使うため共存でき、アンインストール時も英語版のファイルや設定を削除しません。
+
+コード署名されていない配布物ではSmartScreen警告が表示される場合があります。警告を不正に回避する処理は実装していません。`SHA256SUMS.txt`で検証してください。
+
+### ポータブル版
+
+ZIPを任意のフォルダーへ展開し`WirelessBattery.exe`を実行します。設定は`HKEY_CURRENT_USER\Software\WirelessBatteryJP`へ保存されるため、設定まで完全に持ち運ぶ方式ではありません。
+
+## タスクバーと日本語メニュー
+
+表示をクリックすると、デバイスの表示切り替え、スリープ機器の非表示、タスクバー／通知領域モード、更新間隔、今すぐ更新、Windows自動起動、終了を操作できます。通常は60秒更新を推奨します。
+
+## コマンドライン
+
+```text
+WirelessBattery.exe --list   # 検出機器と残量をUTF-8で表示
+WirelessBattery.exe --dump   # HIDコレクションを表示
+WirelessBattery.exe --quit   # 実行中の日本語版を終了
 ```
 
-## Build
+## トラブルシューティング
 
-You need [MinGW-w64](https://www.mingw-w64.org/), e.g. from [MSYS2](https://www.msys2.org/) (`pacman -S mingw-w64-x86_64-gcc make`).
+- タスクバーに出ない：通知領域（`^`を含む）を確認してください。配置失敗時は自動で通知領域方式になります。
+- デバイスがない：接続方式を確認し、`--list`と`--dump`を添えてIssueへ報告してください。
+- スリープ中：レシーバーが一時的に列挙しない場合、最終取得値を薄く表示します。
+- Explorer再起動後：最大数秒で表示を再作成します。
+- HeadsetControl機器だけ出ない：`headsetcontrol.exe`が同じフォルダーにあるか確認してください。
 
+## 開発環境とビルド
+
+MinGW-w64（MSYS2 MINGW64推奨）とGNU Makeを使います。同名の別実装`make`ではビルドできません。
+
+```text
+make
+make test
 ```
-make            # MSYS2 / any shell with make
-build.bat       # plain cmd with g++ and windres on PATH
+
+コマンドプロンプトでは`g++`と`windres`をPATHへ追加して`build.bat`を実行できます。配布物にはInno Setup 6または7が必要です。
+
+```powershell
+powershell -File installer\build-installer.ps1 -Version 1.0.0-jp.1
 ```
 
-To build the installer and portable zip, install [Inno Setup](https://jrsoftware.org/isinfo.php) and run
-`powershell -File installer\build-installer.ps1 -Version 1.0.0`. It downloads the pinned
-HeadsetControl release and verifies its checksum. GitHub Actions does all of this automatically:
-pushing a tag like `v1.0.0` publishes a release with the installer, the portable zip and the
-HeadsetControl source (as its GPL license requires).
+GitHub ActionsはPRで読み取り権限だけを使います。`v1.0.0-jp.1`形式のタグでは、ビルドとテスト成功後に限りインストーラー、ZIP、SHA-256一覧、HeadsetControl対応ソースを生成します。
 
-`WirelessBattery.exe` on its own also works. Without `headsetcontrol.exe` next to it (or on `PATH`) you
-just lose the extra headsets.
+## 仕組みとセキュリティ
 
-## Limitations
+メーカー別ドライバーはvendor／product IDと固有HIDコレクションで対象を限定し、未知の機器へ推測コマンドを送りません。タスクバー表示は`Shell_TrayWnd`内へ配置する非公開構造依存方式のため、通知領域フォールバックを維持します。本アプリはデバイス情報を外部送信せず、不要なネットワーク通信や管理者権限を追加しません。
 
-- **Primary monitor only:** the taskbar widget sits on the primary monitor's taskbar.
-- **Crowded taskbars:** with a very full centered Windows 11 taskbar, the app buttons can reach the widget. On Windows 10 the task-button area is narrowed automatically.
-- **Sleeping devices:** a device that is asleep may not answer. Its last value stays visible, dimmed. Logitech receivers drop sleeping devices from the link, so their last value is kept for 30 minutes.
-- **Keychron keyboards:** they only report their battery over Bluetooth (shown via the Bluetooth support). Over the 2.4 GHz receiver the firmware does not expose it. Keychron mice are supported.
-- **Rapoo:** supported VT mice push their status, so a refresh can wait up to 4 seconds per matching interface. Sleeping mice may stay dimmed with their last reading for up to 30 minutes. Support is for Nordic 54L report `07` and legacy VT3 Pro `BB`; CH584 report `08`, office MT/M-series mice and other firmware protocols are not covered by this driver.
-- **Not supported yet:** MSI wireless mice and keyboards, Razer Kraken / Barracuda headsets, HyperX Pulsefire mice and the Xbox Wireless Headset on the Xbox adapter: their battery protocols are not documented. The Xbox Wireless Headset works over Bluetooth. A USB capture from an owner (see CONTRIBUTING.md) is the way to add them.
-- **Other devices:** some 2.4 GHz devices use undocumented protocols and are not supported yet. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to help add one.
+## ライセンスと謝辞
 
-## How it works
+[GNU General Public License v3.0 or later](LICENSE)です。元作者の著作権表示、ライセンスヘッダー、第三者クレジットを維持します。バイナリの再配布時は対応ソースとライセンス資料を同じGPL条件で提供してください。
 
-Each vendor driver in [`src/drivers/`](src/drivers) recognises its devices by USB vendor and product ID, and only ever sends read-only battery queries. Unknown devices are never written to. The generic fallbacks (HID battery usage, Bluetooth, XInput, HeadsetControl) only look at devices no vendor driver has claimed.
+HeadsetControl同梱物には`THIRD_PARTY_NOTICES.txt`、GPL本文、対応する`headsetcontrol-4.3.0.tar.gz`を用意します。原作者krisgfx9氏、全コントリビューター、HeadsetControl、OpenRazer、Solaarほか各プロトコル調査元へ感謝します。詳細な出典はGit履歴と各ドライバー先頭コメントに保持されています。
 
-The taskbar widget is a layered child window of `Shell_TrayWnd`, placed left of `TrayNotifyWnd`. If Explorer restarts, it is re-created.
-
-## Credits
-
-The protocols come from these projects' research:
-
-- [HeadsetControl](https://github.com/Sapd/HeadsetControl): SteelSeries, Corsair, HyperX and Logitech headsets
-- [OpenRazer](https://github.com/openrazer/openrazer): Razer
-- [Solaar](https://github.com/pwr-Solaar/Solaar) and the Logitech HID++ 2.0 documents: Logitech
-- [rivalcfg](https://github.com/flozz/rivalcfg): SteelSeries mice (Rival Pro from its pull request #294)
-- [glorious-indicator](https://github.com/ikajdan/glorious-indicator) and [glorious-ctl](https://github.com/louis4craft/glorious-ctl): Glorious
-- Hitscan's web configurator ([control.hitscan.com](https://control.hitscan.com)): Hitscan
-- Linux `hid-kysona` (Lode Willems): Kysona, Pulsar and ATK
-- ATK's web configurator ([hub.atk.pro](https://hub.atk.pro)): ATK mice and the N9 Pro headset
-- G-Wolves' web driver ([mouse.xyz](https://mouse.xyz)): G-Wolves models and their protocols
-- Keychron Launcher ([launcher.keychron.com](https://launcher.keychron.com)): Keychron mice
-- LAMZU Aurora ([lamzu.net](https://www.lamzu.net)): LAMZU mice
-- [redragon-battery-omarchy](https://github.com/EliottV17/redragon-battery-omarchy) and [g49-web-control](https://github.com/pingpingjinping/g49-web-control): Redragon ids
-- [peripheral-battery-tray](https://github.com/SteveWang92/peripheral-battery-tray) / [G-Helper](https://github.com/seerge/g-helper): ASUS ROG
-- [zowie-battery](https://github.com/yleshchuk/zowie-battery) and [zowie-battery-tray](https://github.com/IgnacioBarb/zowie-battery-tray): ZOWIE EC-CW and DW
-- [LGSTrayBattery-MotospeedX6](https://github.com/Jacobz888/LGSTrayBattery-MotospeedX6), [omarchy-delux-m900](https://github.com/AeonArcHQ/omarchy-delux-m900), [aj179-linux](https://github.com/Rockeyxx/aj179-linux): Motospeed, Delux, Ajazz
-- OpenRazer PR #2794 and [omarchy-blackshark-v3](https://github.com/ReedME/omarchy-blackshark-v3): BlackShark V3
-- [HyperXWM](https://github.com/Medprj/HyperXWM): HyperX Cloud III Wireless
-- [HyperHeadset](https://github.com/LennardKittner/HyperHeadset): HyperX Cloud III S, Cloud II Core, Cloud Flight S
-- [BatteryTray](https://github.com/qu1ncky/BatteryTray): Rongyuan and Xenta receivers (Attack Shark and others)
-- [coolermaster-usb-protocol](https://github.com/syntactic-spice/coolermaster-usb-protocol) and [MM731-Controller](https://github.com/riVFerd/MM731-Controller): Cooler Master MM712 and MM731
-- [GamesirBatteryTray](https://github.com/WWWyyy452/GamesirBatteryTray) and [Gamesir-Nova-2-Lite-Battery-Detection](https://github.com/AJAY0406/Gamesir-Nova-2-Lite-Battery-Detection): GameSir Nova
-- Linux `hid-playstation`: DualShock 4 / DualSense report layout
-
-## License
-
-[GNU General Public License v3.0 or later](LICENSE). You may use, modify and redistribute this
-software, but anything you distribute that is based on it must be released under the same license,
-with its source code.
+貢献方法は[CONTRIBUTING.md](CONTRIBUTING.md)を参照してください。
