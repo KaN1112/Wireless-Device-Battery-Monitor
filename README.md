@@ -2,7 +2,7 @@
 
 ワイヤレスマウス、ヘッドセット、キーボード、コントローラーのバッテリー残量をWindowsのタスクバーへ直接表示する、軽量なC++17／Win32アプリです。
 
-> 本ソフトウェアはkrisgfx9氏による[Wireless-Device-Battery-Monitor](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor)を基に制作された非公式日本語版です。元作者による公式な承認・サポートを受けた製品ではありません。
+> 本ソフトウェアはkrisgfx9氏による[Wireless-Device-Battery-Monitor](https://github.com/krisgfx9/Wireless-Device-Battery-Monitor)を基に制作された非公式日本語版です。元作者によるサポートを受けた製品ではありません。
 
 日本語版の実画面スクリーンショットは公開前のWindows 10／11実機確認後に追加します。英語版の画像を日本語版の動作画面として掲載しません。
 
